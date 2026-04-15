@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Comet Night Visibility</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="tabs">
+      <button id="tabVisibility" class="tab-btn active" type="button">Visibility Planner</button>
+      <button id="tabSolar" class="tab-btn" type="button">Solar System 3D</button>
+    </header>
+
+    <section id="panelVisibility" class="tab-panel active">
+      <div class="planner-layout">
+        <aside class="panel planner-sidebar">
+          <section class="picker-card" aria-label="Location picker">
+            <h2 class="picker-title">Choose Location on Map</h2>
+            <div id="earthMap"></div>
+            <div class="picker-separator">
+              <span>or</span>
+            </div>
+            <div class="city-search-panel">
+              <label for="citySearchInput">Search City</label>
+              <div class="city-search-row">
+                <input id="citySearchInput" type="text" placeholder="Type city name (e.g. Prague)" autocomplete="off" />
+                <button id="citySearchBtn" type="button" class="city-search-btn">Find</button>
+              </div>
+              <p id="citySearchStatus" class="city-search-status">Enter a city name and press Find.</p>
+            </div>
+            <p id="coords">Lat: -, Lon: -</p>
+          </section>
+
+          <section class="panel planner-controls">
+            <h1>Comet Night Planner</h1>
+            <p>Choose a comet and date, then start live tracking for the selected location.</p>
+
+            <label>Comet name
+              <input id="cometInput" type="text" value="67P/Churyumov-Gerasimenko" />
+            </label>
+
+            <label>Initial date (UTC)
+              <input id="dateInput" type="date" />
+            </label>
+
+            <button id="runBtn" type="button">Start Live Tracking</button>
+            <p id="status" class="status">Pick a location on the map to begin live tracking.</p>
+            <p id="visibilityWindowText" class="status status-secondary">Visibility window: not calculated yet.</p>
+          </section>
+        </aside>
+
+        <section class="panel sky-panel planner-sky-panel">
+          <h2>Night Sky (VirtualSky)</h2>
+          <div id="starmap"></div>
+        </section>
+      </div>
+    </section>
+
+    <section id="panelSolar" class="tab-panel">
+      <div class="solar-layout">
+        <section class="panel solar-controls">
+          <h2>Solar System 3D (Three.js)</h2>
+          <p>Displays all dataset objects at selected UTC time. Click a red point to select object.</p>
+          <label>Snapshot date
+            <input id="solarDateInput" type="date" />
+          </label>
+          <label>Batch size (objects/request)
+            <input id="solarLimitInput" type="number" min="1" step="1" value="1200" />
+          </label>
+          <button id="loadSolarBtn" type="button">Load 3D Map</button>
+
+          <section class="filters-panel" aria-label="3D map filters">
+            <h3>Select Filters:</h3>
+
+            <label>Comet Name
+              <input id="solarNameFilter" type="text" placeholder="Type part of comet name" />
+            </label>
+
+            <label>Designation Class (ID prefix)
+              <select id="solarDesignationFilter">
+                <option value="any" selected>Any</option>
+                <option value="P">P - Periodic comet</option>
+                <option value="C">C - Non-periodic comet</option>
+                <option value="D">D - Lost/disappeared comet</option>
+                <option value="A">A - Asteroidal designation</option>
+                <option value="X">X - Uncertain orbit</option>
+                <option value="I">I - Interstellar object</option>
+                <option value="U">U - Unknown/other</option>
+              </select>
+            </label>
+
+            <label>Popularity
+              <select id="solarFamousFilter">
+                <option value="any" selected>Any</option>
+                <option value="famous">Famous only</option>
+                <option value="not-famous">Not famous</option>
+              </select>
+            </label>
+
+            <label>Earth Impact Watch
+              <select id="solarImpactFilter">
+                <option value="any" selected>Any</option>
+                <option value="watch">Watchlist only (MOID-based)</option>
+                <option value="very_high_watch">Very high watch (MOID &lt;= 0.01 AU)</option>
+              </select>
+            </label>
+
+            <label>Distance to Earth (AU, max)
+              <input id="solarMaxEarthDistance" type="number" min="0" step="0.01" placeholder="e.g. 2.5" />
+            </label>
+
+            <label id="solarVisibilityFilterGroup" class="hidden-filter">When is it visible (from selected observer location)
+              <div class="date-range-row">
+                <input id="solarVisibilityStart" type="date" aria-label="Visibility range start" />
+                <input id="solarVisibilityEnd" type="date" aria-label="Visibility range end" />
+              </div>
+              <button id="runSolarVisibilityBatchBtn" type="button">Run Visibility Range Check</button>
+              <div id="solarVisibilityBatchProgress" class="solar-visibility-progress hidden-filter" aria-live="polite">
+                <progress id="solarVisibilityProgressBar" max="1" value="0"></progress>
+                <p id="solarVisibilityProgressText" class="filters-note">0/0 processed</p>
+              </div>
+            </label>
+            <p id="solarVisibilityFilterHint" class="filters-note">Select observer location on the Earth map to enable visibility date-range filter.</p>
+
+            <label class="checkbox-row">
+              <input id="solarShowPaths" type="checkbox" />
+              <span>Show Orbital Paths?</span>
+            </label>
+
+            <p class="filters-note">* Up to 100 filtered comets can show orbital paths.</p>
+
+            <button id="applySolarFiltersBtn" type="button">Apply Filters</button>
+            <button id="clearSolarFiltersBtn" type="button" class="danger-btn">Clear Filters</button>
+
+            <p id="solarFilterError" class="filter-error" role="status" aria-live="polite"></p>
+          </section>
+
+          <p id="solarStatus" class="status">Press Load 3D Map.</p>
+          <p id="selectedObjectText">Selected object: none</p>
+          <button id="useSelectedBtn" type="button" disabled>Use selected object in planner</button>
+        </section>
+
+        <section class="panel solar-view">
+          <div id="solarCanvas"></div>
+          <section id="solarStatsPanel" class="solar-stats-panel" aria-label="Filtered set statistics">
+            <h3>Filtered Set Statistics</h3>
+            <div class="solar-stats-grid">
+              <article class="solar-stat-card">
+                <p class="solar-stat-label">Filtered Objects</p>
+                <p id="solarStatFilteredCount" class="solar-stat-value">0</p>
+              </article>
+              <article class="solar-stat-card">
+                <p class="solar-stat-label">Famous</p>
+                <p id="solarStatFamousCount" class="solar-stat-value">0</p>
+              </article>
+              <article class="solar-stat-card">
+                <p class="solar-stat-label">Impact Watch</p>
+                <p id="solarStatWatchCount" class="solar-stat-value">0</p>
+              </article>
+              <article class="solar-stat-card">
+                <p class="solar-stat-label">Avg Earth Distance</p>
+                <p id="solarStatAvgDistance" class="solar-stat-value">-</p>
+              </article>
+            </div>
+            <div class="solar-pie-row">
+              <div id="solarClassPie" class="solar-class-pie" role="img" aria-label="Class distribution pie chart"></div>
+              <ul id="solarClassLegend" class="solar-class-legend"></ul>
+            </div>
+            <section class="solar-extra-stat" aria-label="Orbit shape distribution">
+              <h4>Orbit Shape Mix (from Eccentricity)</h4>
+              <div id="solarOrbitShapeBars" class="solar-orbit-bars"></div>
+            </section>
+            <section class="solar-extra-stat" aria-label="Impact risk band distribution">
+              <h4>Impact Risk Band Split</h4>
+              <div id="solarImpactRiskBars" class="solar-orbit-bars"></div>
+            </section>
+          </section>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/three/build/three.min.js"></script>
+  <script src="https://slowe.github.io/VirtualSky/stuquery.min.js"></script>
+  <script src="https://slowe.github.io/VirtualSky/virtualsky.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

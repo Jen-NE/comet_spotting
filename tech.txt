@@ -1,0 +1,82 @@
+Programming languages
+
+Python for backend API, orbital calculations, and data preprocessing scripts.
+JavaScript for frontend interaction and visualization.
+HTML and CSS for page structure and styling.
+
+Backend and computation
+
+Python standard library HTTP server (BaseHTTPRequestHandler, ThreadingHTTPServer) for endpoints.
+Skyfield for astronomical computations (positions, right ascension, declination, horizon checks).
+JPL DE421 ephemeris file for solar system body positions.
+MPC comet orbit model support from Skyfield data utilities.
+Pandas for CSV loading and filtering of orbital records.
+
+Frontend and visualization
+
+Leaflet with OpenStreetMap tiles for selecting observer location on Earth.
+VirtualSky for night-sky rendering and comet path markers.
+Three.js for 3D solar-system style point-cloud visualization of objects and planets.
+Vanilla JavaScript (no frontend framework) for UI state, API calls, and interactions.
+Data handling and tooling
+
+CSV files as the primary project data source.
+Python utility scripts for collecting unique object names, fetching orbital elements, filtering API failures, and merging cleaned results.
+aiohttp and requests used in data-acquisition utilities.
+
+Architecture summary
+
+Lightweight client-server architecture:
+Frontend sends requests to backend API.
+Backend computes visibility and object positions from orbital data.
+Frontend maps response fields to map, sky, and 3D visual encodings.
+Data mapping (attributes to UI and visual encodings)
+
+A. Visibility Planner view
+
+Data source
+Processed orbital dataset (horizons_orbital_data.csv) via backend calculations.
+Input mapping
+comet (object name): text input field.
+lat, lon: selected by click on Leaflet map and shown as coordinates text.
+date: date picker (UTC night window starts at 18:00).
+interval_hours: select box controlling sample step.
+API output to UI mapping
+
+message: status text under controls.
+visible (boolean): determines whether comet pointers are drawn.
+start, end: define sky clock initialization and report context.
+samples[].iso_time: converted to HH:MM UTC labels.
+samples[].ra_hours: mapped to horizontal sky position (converted to degrees, RA × 15).
+samples[].dec_degrees: mapped to vertical sky position.
+samples[].visible: filter; only visible samples become markers.
+samples[].distance_au: computed and available for future labels/legend (currently not directly encoded visually).
+
+Visual encodings
+Position encoding: RA/Dec to marker placement in VirtualSky.
+Color encoding: visible comet points shown in red.
+Text encoding: status + list of visible sample times.
+
+B. Solar System 3D view
+Data source
+Same processed orbital dataset + planetary ephemeris from DE421.
+API output to UI mapping
+
+objects[].object: label/selection identity.
+objects[].x_au, y_au, z_au: physical heliocentric coordinates (data values).
+objects[].scene_x, scene_y, scene_z: transformed coordinates used for 3D placement.
+objects[].color: marker color.
+objects[].size: sphere radius in 3D scene.
+planets[] fields (name/color/size/scene coordinates): rendered as non-selectable reference bodies.
+iso_time: included in status text.
+object_count, requested_limit, dataset_total, skipped_count: summary text for data quality and coverage.
+Visual encodings
+3D position: scene_x, scene_y, scene_z map to Cartesian coordinates in Three.js.
+Color: planets use per-planet colors; dataset objects use red.
+Size: planet markers larger than comet/object markers.
+Label encoding: larger bodies get text sprites; selected object name shown in UI text.
+Interaction encoding: click selects object, highlights marker (white), and passes name to Visibility Planner.
+Optional short note for submission
+
+Current runtime visualization uses the processed orbital dataset as the canonical source.
+Additional CSVs (for discovery and near-Earth metadata) can be integrated later for richer encodings such as brightness, class color groups, or hazard badges.

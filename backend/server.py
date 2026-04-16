@@ -1127,6 +1127,10 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_file(FRONTEND_DIR / "styles.css", "text/css; charset=utf-8")
             return
 
+        if parsed.path == "/config.js":
+            self._serve_file(FRONTEND_DIR / "config.js", "application/javascript; charset=utf-8")
+            return
+
         self.send_response(404)
         self.end_headers()
 

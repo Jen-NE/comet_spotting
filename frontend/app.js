@@ -79,6 +79,41 @@ function buildApiError(response, payload) {
   return `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
 }
 
+function waitMs(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+async function fetchApiWithRetry(url, options = {}, retries = 2) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const response = await fetch(url, options);
+      const data = await parseApiPayload(response);
+      if (response.ok) {
+        return { response, data };
+      }
+
+      const message = buildApiError(response, data);
+      // Retry transient host/proxy issues and occasional warmup misses.
+      if (attempt < retries && [404, 429, 500, 502, 503, 504].includes(response.status)) {
+        await waitMs(350 * (attempt + 1));
+        continue;
+      }
+      throw new Error(message);
+    } catch (err) {
+      lastError = err;
+      if (attempt >= retries) {
+        throw err;
+      }
+      await waitMs(350 * (attempt + 1));
+    }
+  }
+
+  throw lastError || new Error("Unknown request error");
+}
+
 const SOLAR_CLASS_COLORS = {
   P: "#4f92ff",
   C: "#66c7f4",
@@ -1879,7 +1914,9 @@ async function loadSolarMap() {
   const date = document.getElementById("solarDateInput").value;
   const limitText = (document.getElementById("solarLimitInput")?.value || "").trim();
   const parsedBatch = Number.parseInt(limitText, 10);
-  const batchSize = Number.isFinite(parsedBatch) && parsedBatch > 0 ? parsedBatch : 800;
+  const batchSize = Number.isFinite(parsedBatch) && parsedBatch > 0 ? parsedBatch : 300;
+  let failedRequestUrl = "";
+  let failedBatchIndex = 0;
 
   solarStatus.textContent = "Loading solar system snapshot in batches...";
   try {
@@ -1914,15 +1951,17 @@ async function loadSolarMap() {
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 90000);
-      const response = await fetch(apiUrl(`/api/solar-system?${params.toString()}`), {
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      const data = await parseApiPayload(response);
-      if (!response.ok) {
-        solarStatus.textContent = `Error: ${buildApiError(response, data)}`;
-        return;
+      const requestUrl = apiUrl(`/api/solar-system?${params.toString()}`);
+      failedRequestUrl = requestUrl;
+      failedBatchIndex = batchIndex;
+      let data;
+      try {
+        const result = await fetchApiWithRetry(requestUrl, {
+          signal: controller.signal,
+        });
+        data = result.data;
+      } finally {
+        clearTimeout(timeoutId);
       }
 
       if (!isoTime && data.iso_time) {
@@ -1978,7 +2017,9 @@ async function loadSolarMap() {
       solarStatus.textContent = "A batch request timed out. Reduce batch size and try again.";
       return;
     }
-    solarStatus.textContent = `Request failed: ${err}`;
+    const batchHint = failedBatchIndex > 0 ? ` (batch ${failedBatchIndex})` : "";
+    const urlHint = failedRequestUrl ? ` URL: ${failedRequestUrl}` : "";
+    solarStatus.textContent = `Request failed${batchHint}: ${err}.${urlHint}`;
   }
 }
 

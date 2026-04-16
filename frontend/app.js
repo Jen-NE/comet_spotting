@@ -46,6 +46,39 @@ function apiUrl(path) {
   return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
 }
 
+async function parseApiPayload(response) {
+  const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+  const raw = await response.text();
+  if (!raw) {
+    return {};
+  }
+
+  if (contentType.includes("application/json")) {
+    return JSON.parse(raw);
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { _rawText: raw };
+  }
+}
+
+function buildApiError(response, payload) {
+  if (payload && typeof payload.error === "string" && payload.error.trim()) {
+    return payload.error.trim();
+  }
+
+  if (payload && typeof payload._rawText === "string") {
+    const snippet = payload._rawText.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 180);
+    if (snippet) {
+      return `HTTP ${response.status}: ${snippet}`;
+    }
+  }
+
+  return `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
+}
+
 const SOLAR_CLASS_COLORS = {
   P: "#4f92ff",
   C: "#66c7f4",
@@ -287,9 +320,9 @@ async function fetchApproxVisibilityWindow(cometName, dateText) {
 
   try {
     const response = await fetch(apiUrl(`/api/comet-visibility-window?${params.toString()}`));
-    const data = await response.json();
+    const data = await parseApiPayload(response);
     if (!response.ok) {
-      throw new Error(data.error || `HTTP ${response.status}`);
+      throw new Error(buildApiError(response, data));
     }
 
     cometVisibilityWindowCache.set(key, data);
@@ -582,9 +615,9 @@ async function flushCometLiveQueue() {
 
   try {
     const response = await fetch(apiUrl(`/api/comet-position?${params.toString()}`));
-    const data = await response.json();
+    const data = await parseApiPayload(response);
     if (!response.ok) {
-      throw new Error(data.error || `HTTP ${response.status}`);
+      throw new Error(buildApiError(response, data));
     }
 
     if (sessionId !== cometLiveSessionId || cometName !== activeCometName) {
@@ -1469,9 +1502,9 @@ async function pollSolarVisibilityBatchStatus() {
 
   try {
     const response = await fetch(apiUrl(`/api/visibility-batch/status?job_id=${encodeURIComponent(solarVisibilityBatchJobId)}`));
-    const data = await response.json();
+    const data = await parseApiPayload(response);
     if (!response.ok) {
-      throw new Error(data.error || `HTTP ${response.status}`);
+      throw new Error(buildApiError(response, data));
     }
 
     const processed = Number(data.processed || 0);
@@ -1551,9 +1584,9 @@ async function runSolarVisibilityBatch() {
       },
       body: JSON.stringify(payload),
     });
-    const data = await response.json();
+    const data = await parseApiPayload(response);
     if (!response.ok) {
-      throw new Error(data.error || `HTTP ${response.status}`);
+      throw new Error(buildApiError(response, data));
     }
 
     solarVisibilityBatchJobId = String(data.job_id || "");
@@ -1886,9 +1919,9 @@ async function loadSolarMap() {
       });
       clearTimeout(timeoutId);
 
-      const data = await response.json();
+      const data = await parseApiPayload(response);
       if (!response.ok) {
-        solarStatus.textContent = `Error: ${data.error || "unknown"}`;
+        solarStatus.textContent = `Error: ${buildApiError(response, data)}`;
         return;
       }
 

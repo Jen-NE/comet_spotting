@@ -277,6 +277,16 @@ def _parse_iso_datetime_utc(value: str) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def _optional_float(value: object) -> float | None:
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(v):
+        return None
+    return v
+
+
 def _merge_visibility_windows(
     samples: list[dict[str, object]],
     *,
@@ -868,6 +878,15 @@ def solar_system_snapshot(
                 "earth_impact_watch": as_bool(row.get("earth_impact_watch", False)),
                 "earth_impact_risk_band": str(row.get("earth_impact_risk_band", "unknown")),
                 "earth_impact_note": str(row.get("earth_impact_note", "")),
+                "moid_au": _optional_float(row.get("moid")),
+                "absolute_mag_h": _optional_float(row.get("h")),
+                "slope_g": _optional_float(row.get("g")),
+                "color_bv": _optional_float(row.get("b_v")),
+                "albedo": _optional_float(row.get("albedo")),
+                "radius_km": _optional_float(row.get("rad")),
+                "rotation_period_hours": _optional_float(row.get("rotper")),
+                "gm": _optional_float(row.get("gm")),
+                "spectral_type": str(row.get("styp", "")).strip(),
                 "color": "#ff2b2b",
                 "size": 0.14,
             }
@@ -889,6 +908,63 @@ def solar_system_snapshot(
         "next_offset": next_offset if has_more else None,
         "planets": planets,
         "objects": objects,
+    }
+
+
+def object_stats_lookup(object_name: str) -> dict[str, object]:
+    normalized = object_name.strip()
+    if not normalized:
+        raise ValueError("object must be provided")
+
+    df = pd.read_csv(default_orbital_csv_path())
+    mask = df["object"].astype(str).str.strip().str.lower() == normalized.lower()
+    if not mask.any():
+        raise ValueError(f"Object not found in dataset: {object_name}")
+
+    row = df.loc[mask].iloc[0]
+
+    def as_bool(value: object) -> bool:
+        text = str(value).strip().lower()
+        return text in {"1", "true", "yes", "y"}
+
+    alternative_name_raw = str(row.get("alternative_name", "")).strip()
+    alternative_name = (
+        alternative_name_raw
+        if alternative_name_raw.lower() not in {"", "nan", "none", "null"}
+        else ""
+    )
+
+    return {
+        "object": str(row.get("object", "")),
+        "display_name": alternative_name or str(row.get("object", "")),
+        "alternative_name": alternative_name,
+        "designation_class": str(row.get("designation_class", "")) or "U",
+        "designation_class_description": str(
+            row.get("designation_class_description", "Unknown designation class")
+        ),
+        "is_asteroid_designation": as_bool(row.get("is_asteroid_designation", False)),
+        "is_famous": as_bool(row.get("is_famous", False)),
+        "popular_name": str(row.get("popular_name", "")),
+        "fame_note": str(row.get("fame_note", "")),
+        "earth_impact_watch": as_bool(row.get("earth_impact_watch", False)),
+        "earth_impact_risk_band": str(row.get("earth_impact_risk_band", "unknown")),
+        "earth_impact_note": str(row.get("earth_impact_note", "")),
+        "epoch_jd": float(row.get("epoch", 0.0)),
+        "tp_jd": float(row.get("tp", 0.0)),
+        "eccent": float(row.get("eccent", 0.0)),
+        "inclin": float(row.get("inclin", 0.0)),
+        "perihel": float(row.get("perihel", 0.0)),
+        "long_ascend": float(row.get("long_ascend", 0.0)),
+        "peri_dist": float(row.get("peri_dist", 0.0)),
+        "moid_au": _optional_float(row.get("moid")),
+        "absolute_mag_h": _optional_float(row.get("h")),
+        "slope_g": _optional_float(row.get("g")),
+        "color_bv": _optional_float(row.get("b_v")),
+        "albedo": _optional_float(row.get("albedo")),
+        "radius_km": _optional_float(row.get("rad")),
+        "rotation_period_hours": _optional_float(row.get("rotper")),
+        "gm": _optional_float(row.get("gm")),
+        "spectral_type": str(row.get("styp", "")).strip(),
     }
 
 
@@ -1092,6 +1168,21 @@ class Handler(BaseHTTPRequestHandler):
                 interval_minutes = int(interval_minutes_text)
 
                 payload = comet_visibility_window(comet, lat, lon, date_text, interval_minutes)
+                self._send_json(payload)
+            except ValueError as exc:
+                self._send_json({"error": str(exc)}, status=400)
+            except Exception as exc:  # pragma: no cover - simple server error path
+                self._send_json({"error": f"Unexpected server error: {exc}"}, status=500)
+            return
+
+        if parsed.path == "/api/object-stats":
+            try:
+                query = parse_qs(parsed.query)
+                object_name = (query.get("object", [""])[0] or "").strip()
+                if not object_name:
+                    raise ValueError("Missing query parameter: object")
+
+                payload = object_stats_lookup(object_name)
                 self._send_json(payload)
             except ValueError as exc:
                 self._send_json({"error": str(exc)}, status=400)

@@ -46,6 +46,11 @@
               <input id="dateInput" type="date" />
             </label>
 
+            <label>Night sky jump step (minutes)
+              <input id="nightSkyJumpMinutes" type="number" min="1" step="1" value="15" />
+            </label>
+            <p class="status status-secondary">Use Left/Right arrow keys to jump time backward/forward by this step.</p>
+
             <button id="runBtn" type="button">Start Live Tracking</button>
             <p id="status" class="status">Pick a location on the map to begin live tracking.</p>
             <p id="visibilityWindowText" class="status status-secondary">Visibility window: not calculated yet.</p>
@@ -55,6 +60,10 @@
         <section class="panel sky-panel planner-sky-panel">
           <h2>Night Sky (VirtualSky)</h2>
           <div id="starmap"></div>
+          <section id="nightObjectStats" class="object-stats-panel" aria-live="polite">
+            <h3>Selected Object Insights</h3>
+            <p class="object-stats-empty">Pick an object in the 3D map to view dataset statistics here.</p>
+          </section>
         </section>
       </div>
     </section>
@@ -140,6 +149,9 @@
 
           <p id="solarStatus" class="status">Press Load 3D Map.</p>
           <p id="selectedObjectText">Selected object: none</p>
+          <section id="selectedObjectStats" class="object-stats-panel" aria-live="polite">
+            <p class="object-stats-empty">Select an object on the 3D map to display statistics.</p>
+          </section>
           <button id="useSelectedBtn" type="button" disabled>Use selected object in planner</button>
         </section>
 

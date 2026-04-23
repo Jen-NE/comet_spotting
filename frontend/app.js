@@ -39,6 +39,7 @@ let solarVisibilityBatchBaseKey = "";
 let threeLoadPromise = null;
 const cometVisibilityWindowCache = new Map();
 const glowTextureCache = new Map();
+const SOLAR_PICK_TOLERANCE_PX = 16;
 
 const API_BASE_URL = String(window.COMET_API_BASE_URL || "").trim().replace(/\/+$/, "");
 
@@ -122,6 +123,16 @@ const SOLAR_CLASS_COLORS = {
   X: "#f2ce5c",
   I: "#c58fff",
   U: "#9aa7bf",
+};
+
+const SOLAR_CLASS_LABELS = {
+  P: "Periodic comet",
+  C: "Non-periodic comet",
+  D: "Lost or disappeared comet",
+  A: "Asteroidal designation",
+  X: "Uncertain orbit",
+  I: "Interstellar object",
+  U: "Unknown or other",
 };
 
 const SOLAR_RISK_COLORS = {
@@ -548,6 +559,60 @@ function buildSky(latitude, longitude, startIso) {
   });
 }
 
+function getNightSkyJumpMinutes() {
+  const raw = String(document.getElementById("nightSkyJumpMinutes")?.value || "").trim();
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 15;
+  }
+  return Math.min(parsed, 24 * 60);
+}
+
+function jumpNightSkyByMinutes(deltaMinutes) {
+  if (!sky) {
+    return;
+  }
+
+  const current = getSkyClockDate();
+  if (!current) {
+    return;
+  }
+
+  const deltaSeconds = deltaMinutes * 60;
+  if (typeof sky.setClock === "function") {
+    sky.setClock(deltaSeconds).calendarUpdate();
+  } else {
+    const next = new Date(current.getTime() + (deltaSeconds * 1000));
+    sky.clock = next;
+    if (typeof sky.draw === "function") {
+      sky.draw();
+    }
+  }
+
+  const updatedClock = getSkyClockDate();
+  if (!updatedClock) {
+    return;
+  }
+
+  const iso = toUtcIsoSecond(updatedClock);
+  cometLiveLastSecond = iso;
+  queueCometLiveUpdate(iso);
+}
+
+function shouldIgnoreArrowHotkeys() {
+  const active = document.activeElement;
+  if (!active) {
+    return false;
+  }
+
+  if (active.isContentEditable) {
+    return true;
+  }
+
+  const tag = String(active.tagName || "").toLowerCase();
+  return tag === "input" || tag === "textarea" || tag === "select";
+}
+
 function buildInitialSkyIso(dateText) {
   if (!dateText) {
     return new Date().toISOString();
@@ -761,8 +826,12 @@ async function runVisibilityCheck() {
 
   if (!comet) {
     status.textContent = "Enter a comet name.";
+    renderObjectStatsMessage("Enter an object ID to display statistics.");
     return;
   }
+
+  await loadTypedObjectStats(comet);
+
   if (selectedLat === null || selectedLon === null) {
     status.textContent = "Pick observer location on Earth map first.";
     return;
@@ -778,6 +847,37 @@ async function runVisibilityCheck() {
 }
 
 document.getElementById("runBtn").addEventListener("click", runVisibilityCheck);
+
+const cometInputEl = document.getElementById("cometInput");
+if (cometInputEl) {
+  cometInputEl.addEventListener("blur", () => {
+    void loadTypedObjectStats(cometInputEl.value);
+  });
+  cometInputEl.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      void loadTypedObjectStats(cometInputEl.value);
+    }
+  });
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+    return;
+  }
+  if (!sky || shouldIgnoreArrowHotkeys()) {
+    return;
+  }
+
+  const panelVisibility = document.getElementById("panelVisibility");
+  if (!panelVisibility || !panelVisibility.classList.contains("active")) {
+    return;
+  }
+
+  event.preventDefault();
+  const stepMinutes = getNightSkyJumpMinutes();
+  const direction = event.key === "ArrowRight" ? 1 : -1;
+  jumpNightSkyByMinutes(direction * stepMinutes);
+});
 
 function clearSolarMeshes() {
   solarMeshes.forEach((mesh) => {
@@ -1039,6 +1139,152 @@ function formatEarthDistance(auValue) {
   return `${auValue.toFixed(3)} AU`;
 }
 
+function buildSelectedObjectStatsMarkup(obj) {
+  if (!obj || typeof obj !== "object") {
+    return "";
+  }
+
+  const displayName = String(obj.display_name || obj.object || "Unknown object");
+  const designationClass = String(obj.designation_class_description || obj.designation_class || "Unknown class");
+  const riskBandRaw = String(obj.earth_impact_risk_band || "unknown").replace(/_/g, " ");
+  const riskBand = riskBandRaw.charAt(0).toUpperCase() + riskBandRaw.slice(1);
+  const q = Number(obj.peri_dist);
+  const e = Number(obj.eccent);
+  const i = Number(obj.inclin);
+  const earthDistance = Number(obj.earth_distance_au);
+  const moid = Number(obj.moid_au);
+  const albedo = Number(obj.albedo);
+  const hAbs = Number(obj.absolute_mag_h);
+  const slopeG = Number(obj.slope_g);
+  const bv = Number(obj.color_bv);
+  const radiusKm = Number(obj.radius_km);
+  const rotationHours = Number(obj.rotation_period_hours);
+  const spectralType = String(obj.spectral_type || "").trim();
+
+  const chips = [];
+  if (designationClass) {
+    chips.push(`<span class="object-insight-chip">${designationClass}</span>`);
+  }
+  if (Boolean(obj.is_famous)) {
+    chips.push('<span class="object-insight-chip">Famous object</span>');
+  }
+  if (Boolean(obj.earth_impact_watch)) {
+    chips.push('<span class="object-insight-chip">Impact watchlist</span>');
+  }
+
+  const cards = [];
+  if (Number.isFinite(earthDistance)) {
+    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Distance from Earth</p><p class="object-insight-value">${formatEarthDistance(earthDistance)}</p></article>`);
+  }
+  if (Number.isFinite(q)) {
+    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Perihelion Distance</p><p class="object-insight-value">${q.toFixed(3)} AU</p></article>`);
+  }
+  if (Number.isFinite(e)) {
+    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Eccentricity</p><p class="object-insight-value">${e.toFixed(4)}</p></article>`);
+  }
+  if (Number.isFinite(i)) {
+    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Inclination</p><p class="object-insight-value">${i.toFixed(2)} deg</p></article>`);
+  }
+  if (Number.isFinite(moid)) {
+    cards.push(`<article class="object-insight-card"><p class="object-insight-label">MOID</p><p class="object-insight-value">${moid.toFixed(4)} AU</p></article>`);
+  }
+  if (Number.isFinite(albedo)) {
+    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Albedo</p><p class="object-insight-value">${albedo.toFixed(3)}</p></article>`);
+  }
+  if (Number.isFinite(hAbs)) {
+    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Absolute Mag (H)</p><p class="object-insight-value">${hAbs.toFixed(2)}</p></article>`);
+  }
+  if (Number.isFinite(slopeG)) {
+    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Slope (G)</p><p class="object-insight-value">${slopeG.toFixed(2)}</p></article>`);
+  }
+  if (Number.isFinite(bv)) {
+    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Color Index (B-V)</p><p class="object-insight-value">${bv.toFixed(3)}</p></article>`);
+  }
+  if (Number.isFinite(radiusKm)) {
+    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Radius</p><p class="object-insight-value">${radiusKm.toFixed(2)} km</p></article>`);
+  }
+  if (Number.isFinite(rotationHours)) {
+    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Rotation Period</p><p class="object-insight-value">${rotationHours.toFixed(2)} h</p></article>`);
+  }
+  if (spectralType) {
+    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Spectral Type</p><p class="object-insight-value">${spectralType}</p></article>`);
+  }
+
+  const notes = [];
+  if (riskBand && riskBand.toLowerCase() !== "unknown") {
+    notes.push(`Risk band: ${riskBand}.`);
+  }
+  if (String(obj.earth_impact_note || "").trim()) {
+    notes.push(String(obj.earth_impact_note).trim());
+  }
+  if (String(obj.fame_note || "").trim()) {
+    notes.push(String(obj.fame_note).trim());
+  }
+
+  if (cards.length === 0 && notes.length === 0 && chips.length === 0) {
+    return "";
+  }
+
+  return `
+    <p class="object-insight-title">${displayName}</p>
+    ${chips.length ? `<div class="object-insight-chips">${chips.join("")}</div>` : ""}
+    ${cards.length ? `<div class="object-insight-grid">${cards.join("")}</div>` : ""}
+    ${notes.length ? `<p class="object-insight-note">${notes.join(" ")}</p>` : ""}
+  `;
+}
+
+function renderSelectedObjectStats(obj) {
+  const solarPanel = document.getElementById("selectedObjectStats");
+  const nightPanel = document.getElementById("nightObjectStats");
+  const markup = buildSelectedObjectStatsMarkup(obj);
+
+  const fallback = '<p class="object-stats-empty">No statistical data is available for this object in the current dataset.</p>';
+  const empty = '<p class="object-stats-empty">Select an object on the 3D map to display statistics.</p>';
+
+  if (solarPanel) {
+    solarPanel.innerHTML = obj ? (markup || fallback) : empty;
+  }
+  if (nightPanel) {
+    const body = obj ? (markup || fallback) : empty;
+    nightPanel.innerHTML = `<h3>Selected Object Insights</h3>${body}`;
+  }
+}
+
+function renderObjectStatsMessage(message) {
+  const text = String(message || "No statistical data available.");
+  const html = `<p class="object-stats-empty">${text}</p>`;
+
+  const solarPanel = document.getElementById("selectedObjectStats");
+  const nightPanel = document.getElementById("nightObjectStats");
+  if (solarPanel) {
+    solarPanel.innerHTML = html;
+  }
+  if (nightPanel) {
+    nightPanel.innerHTML = `<h3>Selected Object Insights</h3>${html}`;
+  }
+}
+
+async function loadTypedObjectStats(objectId) {
+  const query = String(objectId || "").trim();
+  if (!query) {
+    renderObjectStatsMessage("Enter an object ID to display statistics.");
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams({ object: query });
+    const response = await fetch(apiUrl(`/api/object-stats?${params.toString()}`));
+    const data = await parseApiPayload(response);
+    if (!response.ok) {
+      renderObjectStatsMessage(String(data.error || "No statistical data found for this object ID."));
+      return;
+    }
+    renderSelectedObjectStats(data);
+  } catch {
+    renderObjectStatsMessage("Unable to load statistics right now.");
+  }
+}
+
 function updateSolarStatistics(objects, datasetTotal) {
   const filteredCountEl = document.getElementById("solarStatFilteredCount");
   const famousCountEl = document.getElementById("solarStatFamousCount");
@@ -1070,9 +1316,14 @@ function updateSolarStatistics(objects, datasetTotal) {
   avgDistanceEl.textContent = formatEarthDistance(avgDistance);
 
   const classCounts = new Map();
+  const classDescriptions = new Map();
   list.forEach((obj) => {
     const key = String(obj.designation_class || "U").toUpperCase();
     classCounts.set(key, (classCounts.get(key) || 0) + 1);
+    const desc = String(obj.designation_class_description || "").trim();
+    if (desc && (!classDescriptions.has(key) || classDescriptions.get(key) === "Unknown designation class")) {
+      classDescriptions.set(key, desc);
+    }
   });
 
   const sortedClasses = Array.from(classCounts.entries()).sort((a, b) => b[1] - a[1]);
@@ -1102,12 +1353,13 @@ function updateSolarStatistics(objects, datasetTotal) {
     sortedClasses.forEach(([className, count]) => {
       const color = SOLAR_CLASS_COLORS[className] || "#9aa7bf";
       const pct = ((count / filteredCount) * 100).toFixed(1);
+      const classLabel = classDescriptions.get(className) || SOLAR_CLASS_LABELS[className] || "Unknown or other";
       const item = document.createElement("li");
       const swatch = document.createElement("span");
       swatch.className = "solar-legend-swatch";
       swatch.style.backgroundColor = color;
       const text = document.createElement("span");
-      text.textContent = `${className}: ${count} (${pct}%)`;
+      text.textContent = `${classLabel}: ${count} (${pct}%)`;
       item.appendChild(swatch);
       item.appendChild(text);
       legendEl.appendChild(item);
@@ -1801,12 +2053,14 @@ function onSolarCanvasClick(event) {
 
   solarRaycaster.setFromCamera(solarPointer, solarCamera);
   const hits = solarRaycaster.intersectObjects(solarMeshes);
-  if (hits.length === 0) {
-    return;
-  }
-
   const selectableHit = hits.find((entry) => entry.object?.userData?.selectable);
-  const hit = selectableHit ? selectableHit.object : hits[0].object;
+  let hit = selectableHit ? selectableHit.object : (hits[0]?.object || null);
+  if (!hit) {
+    hit = findNearestSelectableMesh(event.clientX, event.clientY, rect);
+    if (!hit) {
+      return;
+    }
+  }
   if (!hit.userData.selectable) {
     document.getElementById("selectedObjectText").textContent = `Selected object: ${hit.userData.displayName || hit.userData.objectName} (reference only)`;
     return;
@@ -1839,7 +2093,41 @@ function onSolarCanvasClick(event) {
   const altNameSuffix = popularName ? ` (${popularName})` : "";
   const classSuffix = classText ? ` [${classText}]` : "";
   document.getElementById("selectedObjectText").textContent = `Selected object: ${displayName}${designationSuffix}${altNameSuffix}${classSuffix}${famousSuffix}`;
+  renderSelectedObjectStats(hit.userData.objectData || null);
   document.getElementById("useSelectedBtn").disabled = false;
+}
+
+function findNearestSelectableMesh(clientX, clientY, rect) {
+  if (!solarCamera || !Array.isArray(solarMeshes) || solarMeshes.length === 0) {
+    return null;
+  }
+
+  let nearest = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  solarMeshes.forEach((mesh) => {
+    if (!mesh?.userData?.selectable) {
+      return;
+    }
+
+    const projected = mesh.position.clone().project(solarCamera);
+    if (!Number.isFinite(projected.x) || !Number.isFinite(projected.y) || projected.z < -1 || projected.z > 1) {
+      return;
+    }
+
+    const screenX = rect.left + ((projected.x + 1) * 0.5 * rect.width);
+    const screenY = rect.top + (((-projected.y) + 1) * 0.5 * rect.height);
+    const distance = Math.hypot(screenX - clientX, screenY - clientY);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearest = mesh;
+    }
+  });
+
+  if (nearestDistance <= SOLAR_PICK_TOLERANCE_PX) {
+    return nearest;
+  }
+  return null;
 }
 
 function renderSolarObjects(objects) {
@@ -1874,6 +2162,7 @@ function renderSolarObjects(objects) {
     mesh.userData.popularName = obj.popular_name || "";
     mesh.userData.designationClass = obj.designation_class || "";
     mesh.userData.isFamous = Boolean(obj.is_famous);
+    mesh.userData.objectData = obj;
     solarScene.add(mesh);
     solarMeshes.push(mesh);
 

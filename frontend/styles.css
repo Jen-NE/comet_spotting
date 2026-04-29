@@ -450,12 +450,14 @@ button {
 .status {
   margin-top: 12px;
   color: #a8d5ff;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .status-secondary {
   margin-top: 6px;
   color: #c6ddff;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .filters-panel {

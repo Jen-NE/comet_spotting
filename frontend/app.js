@@ -10,6 +10,7 @@ let cometLiveInFlight = false;
 let cometLivePendingIso = null;
 let cometLiveSessionId = 0;
 let observerLocationVersion = 0;
+let currentStatsObject = null;
 
 let solarRenderer = null;
 let solarScene = null;
@@ -725,6 +726,7 @@ async function flushCometLiveQueue() {
     }
 
     replaceCometPointer(data);
+    mergeLiveDistanceIntoSelectedStats(data.distance_au);
     const objectAlt = Number(data.object_altitude_degrees).toFixed(1);
     const sunAlt = Number(data.sun_altitude_degrees).toFixed(1);
     status.textContent = `${data.comet} at ${formatMapDateLabel(data.iso_time)} ${formatMapTimeLabel(data.iso_time)} map time: ${data.visible ? "visible" : "below horizon"} (object alt ${objectAlt} deg, sun alt ${sunAlt} deg).`;
@@ -1139,6 +1141,13 @@ function formatEarthDistance(auValue) {
   return `${auValue.toFixed(3)} AU`;
 }
 
+function formatStatValue(value, formatter) {
+  if (!Number.isFinite(value)) {
+    return "nan";
+  }
+  return formatter(value);
+}
+
 function buildSelectedObjectStatsMarkup(obj) {
   if (!obj || typeof obj !== "object") {
     return "";
@@ -1148,17 +1157,17 @@ function buildSelectedObjectStatsMarkup(obj) {
   const designationClass = String(obj.designation_class_description || obj.designation_class || "Unknown class");
   const riskBandRaw = String(obj.earth_impact_risk_band || "unknown").replace(/_/g, " ");
   const riskBand = riskBandRaw.charAt(0).toUpperCase() + riskBandRaw.slice(1);
-  const q = Number(obj.peri_dist);
-  const e = Number(obj.eccent);
-  const i = Number(obj.inclin);
-  const earthDistance = Number(obj.earth_distance_au);
-  const moid = Number(obj.moid_au);
-  const albedo = Number(obj.albedo);
-  const hAbs = Number(obj.absolute_mag_h);
-  const slopeG = Number(obj.slope_g);
-  const bv = Number(obj.color_bv);
-  const radiusKm = Number(obj.radius_km);
-  const rotationHours = Number(obj.rotation_period_hours);
+  const q = obj.peri_dist == null ? NaN : Number(obj.peri_dist);
+  const e = obj.eccent == null ? NaN : Number(obj.eccent);
+  const i = obj.inclin == null ? NaN : Number(obj.inclin);
+  const earthDistance = obj.earth_distance_au == null ? NaN : Number(obj.earth_distance_au);
+  const moid = obj.moid_au == null ? NaN : Number(obj.moid_au);
+  const albedo = obj.albedo == null ? NaN : Number(obj.albedo);
+  const hAbs = obj.absolute_mag_h == null ? NaN : Number(obj.absolute_mag_h);
+  const slopeG = obj.slope_g == null ? NaN : Number(obj.slope_g);
+  const bv = obj.color_bv == null ? NaN : Number(obj.color_bv);
+  const radiusKm = obj.radius_km == null ? NaN : Number(obj.radius_km);
+  const rotationHours = obj.rotation_period_hours == null ? NaN : Number(obj.rotation_period_hours);
   const spectralType = String(obj.spectral_type || "").trim();
 
   const chips = [];
@@ -1173,47 +1182,62 @@ function buildSelectedObjectStatsMarkup(obj) {
   }
 
   const cards = [];
-  if (Number.isFinite(earthDistance)) {
-    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Distance from Earth</p><p class="object-insight-value">${formatEarthDistance(earthDistance)}</p></article>`);
-  }
-  if (Number.isFinite(q)) {
-    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Perihelion Distance</p><p class="object-insight-value">${q.toFixed(3)} AU</p></article>`);
-  }
-  if (Number.isFinite(e)) {
-    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Eccentricity</p><p class="object-insight-value">${e.toFixed(4)}</p></article>`);
-  }
-  if (Number.isFinite(i)) {
-    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Inclination</p><p class="object-insight-value">${i.toFixed(2)} deg</p></article>`);
-  }
-  if (Number.isFinite(moid)) {
-    cards.push(`<article class="object-insight-card"><p class="object-insight-label">MOID</p><p class="object-insight-value">${moid.toFixed(4)} AU</p></article>`);
-  }
-  if (Number.isFinite(albedo)) {
-    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Albedo</p><p class="object-insight-value">${albedo.toFixed(3)}</p></article>`);
-  }
-  if (Number.isFinite(hAbs)) {
-    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Absolute Mag (H)</p><p class="object-insight-value">${hAbs.toFixed(2)}</p></article>`);
-  }
-  if (Number.isFinite(slopeG)) {
-    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Slope (G)</p><p class="object-insight-value">${slopeG.toFixed(2)}</p></article>`);
-  }
-  if (Number.isFinite(bv)) {
-    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Color Index (B-V)</p><p class="object-insight-value">${bv.toFixed(3)}</p></article>`);
-  }
-  if (Number.isFinite(radiusKm)) {
-    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Radius</p><p class="object-insight-value">${radiusKm.toFixed(2)} km</p></article>`);
-  }
-  if (Number.isFinite(rotationHours)) {
-    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Rotation Period</p><p class="object-insight-value">${rotationHours.toFixed(2)} h</p></article>`);
-  }
+  
+  // Distance from Earth - always show if we have data
+  const earthDistanceDisplay = Number.isFinite(earthDistance) ? formatEarthDistance(earthDistance) : "nan";
+  cards.push(`<article class="object-insight-card"><p class="object-insight-label">Distance from Earth</p><p class="object-insight-value">${earthDistanceDisplay}</p></article>`);
+  
+  // Perihelion Distance - always show
+  const qDisplay = formatStatValue(q, (v) => `${v.toFixed(3)} AU`);
+  cards.push(`<article class="object-insight-card"><p class="object-insight-label">Perihelion Distance</p><p class="object-insight-value">${qDisplay}</p></article>`);
+  
+  // Eccentricity - always show
+  const eDisplay = formatStatValue(e, (v) => v.toFixed(4));
+  cards.push(`<article class="object-insight-card"><p class="object-insight-label">Eccentricity</p><p class="object-insight-value">${eDisplay}</p></article>`);
+  
+  // Inclination - always show
+  const iDisplay = formatStatValue(i, (v) => `${v.toFixed(2)} deg`);
+  cards.push(`<article class="object-insight-card"><p class="object-insight-label">Inclination</p><p class="object-insight-value">${iDisplay}</p></article>`);
+  
+  // MOID - always show
+  const moidDisplay = formatStatValue(moid, (v) => `${v.toFixed(4)} AU`);
+  cards.push(`<article class="object-insight-card"><p class="object-insight-label">MOID</p><p class="object-insight-value">${moidDisplay}</p></article>`);
+  
+  // Albedo - always show
+  const albedoDisplay = formatStatValue(albedo, (v) => v.toFixed(3));
+  cards.push(`<article class="object-insight-card"><p class="object-insight-label">Albedo</p><p class="object-insight-value">${albedoDisplay}</p></article>`);
+  
+  // Absolute Magnitude - always show
+  const hAbsDisplay = formatStatValue(hAbs, (v) => v.toFixed(2));
+  cards.push(`<article class="object-insight-card"><p class="object-insight-label">Absolute Mag (H)</p><p class="object-insight-value">${hAbsDisplay}</p></article>`);
+  
+  // Slope G - always show
+  const slopeGDisplay = formatStatValue(slopeG, (v) => v.toFixed(2));
+  cards.push(`<article class="object-insight-card"><p class="object-insight-label">Slope (G)</p><p class="object-insight-value">${slopeGDisplay}</p></article>`);
+  
+  // Color Index - always show
+  const bvDisplay = formatStatValue(bv, (v) => v.toFixed(3));
+  cards.push(`<article class="object-insight-card"><p class="object-insight-label">Color Index (B-V)</p><p class="object-insight-value">${bvDisplay}</p></article>`);
+  
+  // Radius - always show
+  const radiusDisplay = formatStatValue(radiusKm, (v) => `${v.toFixed(2)} km`);
+  cards.push(`<article class="object-insight-card"><p class="object-insight-label">Radius</p><p class="object-insight-value">${radiusDisplay}</p></article>`);
+  
+  // Rotation Period - always show
+  const rotationDisplay = formatStatValue(rotationHours, (v) => `${v.toFixed(2)} h`);
+  cards.push(`<article class="object-insight-card"><p class="object-insight-label">Rotation Period</p><p class="object-insight-value">${rotationDisplay}</p></article>`);
+  
+  // Spectral Type - show if available
   if (spectralType) {
     cards.push(`<article class="object-insight-card"><p class="object-insight-label">Spectral Type</p><p class="object-insight-value">${spectralType}</p></article>`);
   }
+  
+  // Risk Band - show if not unknown
+  if (riskBand && riskBand.toLowerCase() !== "unknown") {
+    cards.push(`<article class="object-insight-card"><p class="object-insight-label">Risk Band</p><p class="object-insight-value">${riskBand}</p></article>`);
+  }
 
   const notes = [];
-  if (riskBand && riskBand.toLowerCase() !== "unknown") {
-    notes.push(`Risk band: ${riskBand}.`);
-  }
   if (String(obj.earth_impact_note || "").trim()) {
     notes.push(String(obj.earth_impact_note).trim());
   }
@@ -1237,6 +1261,8 @@ function renderSelectedObjectStats(obj) {
   const solarPanel = document.getElementById("selectedObjectStats");
   const nightPanel = document.getElementById("nightObjectStats");
   const markup = buildSelectedObjectStatsMarkup(obj);
+
+  currentStatsObject = obj && typeof obj === "object" ? { ...obj } : null;
 
   const fallback = '<p class="object-stats-empty">No statistical data is available for this object in the current dataset.</p>';
   const empty = '<p class="object-stats-empty">Select an object on the 3D map to display statistics.</p>';
@@ -1283,6 +1309,23 @@ async function loadTypedObjectStats(objectId) {
   } catch {
     renderObjectStatsMessage("Unable to load statistics right now.");
   }
+}
+
+function mergeLiveDistanceIntoSelectedStats(distanceAu) {
+  if (!currentStatsObject) {
+    return;
+  }
+
+  const distance = Number(distanceAu);
+  if (!Number.isFinite(distance)) {
+    return;
+  }
+
+  currentStatsObject = {
+    ...currentStatsObject,
+    earth_distance_au: distance,
+  };
+  renderSelectedObjectStats(currentStatsObject);
 }
 
 function updateSolarStatistics(objects, datasetTotal) {

@@ -117,13 +117,13 @@ async function fetchApiWithRetry(url, options = {}, retries = 2) {
 }
 
 const SOLAR_CLASS_COLORS = {
-  P: "#4f92ff",
-  C: "#66c7f4",
-  D: "#f39c5a",
-  A: "#7edf8a",
-  X: "#f2ce5c",
-  I: "#c58fff",
-  U: "#9aa7bf",
+  P: "#1f77b4",
+  C: "#17becf",
+  D: "#ff7f0e",
+  A: "#2ca02c",
+  X: "#e377c2",
+  I: "#d62728",
+  U: "#bcbd22",
 };
 
 const SOLAR_CLASS_LABELS = {
@@ -136,12 +136,71 @@ const SOLAR_CLASS_LABELS = {
   U: "Unknown or other",
 };
 
+// Track selected classes for multi-select filtering
+let selectedDesignationClasses = new Set();
+
 const SOLAR_RISK_COLORS = {
   very_high_watch: "#ff6b6b",
   watch: "#ffad66",
   low: "#6ec58b",
   unknown: "#8b98b3",
 };
+
+function getSolarClassColor(className) {
+  const key = String(className || "U").toUpperCase();
+  return SOLAR_CLASS_COLORS[key] || SOLAR_CLASS_COLORS.U;
+}
+
+function renderSolarTypeLegend() {
+  const legendEl = document.getElementById("solarTypeLegend");
+  if (!legendEl) {
+    return;
+  }
+
+  const orderedClasses = ["P", "C", "D", "A", "X", "I", "U"];
+  legendEl.innerHTML = "";
+
+  orderedClasses.forEach((classKey) => {
+    const item = document.createElement("li");
+    item.setAttribute("role", "button");
+    item.dataset.class = classKey;
+    const swatch = document.createElement("span");
+    swatch.className = "solar-legend-swatch";
+    swatch.style.backgroundColor = getSolarClassColor(classKey);
+
+    const text = document.createElement("span");
+    text.textContent = `${classKey}: ${SOLAR_CLASS_LABELS[classKey] || "Unknown or other"}`;
+
+    item.appendChild(swatch);
+    item.appendChild(text);
+    item.addEventListener("click", () => {
+      if (selectedDesignationClasses.has(classKey)) {
+        selectedDesignationClasses.delete(classKey);
+      } else {
+        selectedDesignationClasses.add(classKey);
+      }
+      updateSolarTypeLegendActiveState();
+      applySolarFilters();
+    });
+
+    legendEl.appendChild(item);
+  });
+  updateSolarTypeLegendActiveState();
+}
+
+function updateSolarTypeLegendActiveState() {
+  const legendEl = document.getElementById("solarTypeLegend");
+  if (!legendEl) return;
+  Array.from(legendEl.querySelectorAll("li")).forEach((li) => {
+    if (selectedDesignationClasses.has(li.dataset.class)) {
+      li.classList.add("selected");
+      li.setAttribute("aria-pressed", "true");
+    } else {
+      li.classList.remove("selected");
+      li.setAttribute("aria-pressed", "false");
+    }
+  });
+}
 
 const CITY_OPTIONS = [
   { label: "Prague, Czechia", lat: 50.0755, lon: 14.4378 },
@@ -522,6 +581,34 @@ function initCitySearch() {
 
 initCitySearch();
 
+function initWelcomeOverlay() {
+  const overlay = document.getElementById("welcomeOverlay");
+  const closeBtn = document.getElementById("welcomeCloseBtn");
+  if (!overlay || !closeBtn) {
+    return;
+  }
+
+  const closeOverlay = () => {
+    overlay.classList.add("hidden");
+    overlay.setAttribute("aria-hidden", "true");
+  };
+
+  closeBtn.addEventListener("click", closeOverlay);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) {
+      closeOverlay();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !overlay.classList.contains("hidden")) {
+      closeOverlay();
+    }
+  });
+}
+
+initWelcomeOverlay();
+renderSolarTypeLegend();
+
 function switchTab(tabName) {
   const tabVisibilityBtn = document.getElementById("tabVisibility");
   const tabSolarBtn = document.getElementById("tabSolar");
@@ -556,6 +643,7 @@ function buildSky(latitude, longitude, startIso) {
     constellations: true,
     latitude,
     longitude,
+    fontsize: 25,
     clock: new Date(startIso),
   });
 }
@@ -566,7 +654,8 @@ function getNightSkyJumpMinutes() {
   if (!Number.isFinite(parsed) || parsed <= 0) {
     return 15;
   }
-  return Math.min(parsed, 24 * 60);
+  const allowed = new Set([15, 30, 45, 60, 120]);
+  return allowed.has(parsed) ? parsed : 15;
 }
 
 function jumpNightSkyByMinutes(deltaMinutes) {
@@ -1038,11 +1127,12 @@ function buildEnrichedSolarObjects(snapshot) {
       : "";
     const displayName = alternativeName || String(obj.object || "");
 
+    const classKey = String(obj.designation_class || "U").toUpperCase();
     return {
       ...obj,
       display_name: displayName,
       alternative_name: alternativeName,
-      designation_class: String(obj.designation_class || "U").toUpperCase(),
+      designation_class: classKey,
       designation_class_description: String(obj.designation_class_description || "Unknown designation class"),
       is_famous: Boolean(obj.is_famous),
       popular_name: String(obj.popular_name || ""),
@@ -1050,6 +1140,7 @@ function buildEnrichedSolarObjects(snapshot) {
       earth_impact_risk_band: String(obj.earth_impact_risk_band || "unknown"),
       earth_distance_au: earthDistanceAu,
       epoch_date: julianDayToDate(Number(obj.epoch_jd)),
+      color: getSolarClassColor(classKey),
     };
   });
 }
@@ -1059,10 +1150,19 @@ function readSolarFilters() {
   const maxDistance = maxDistanceText ? Number(maxDistanceText) : null;
   const visibilityStartDate = String(document.getElementById("solarVisibilityStart").value || "").trim();
   const visibilityEndDate = String(document.getElementById("solarVisibilityEnd").value || "").trim();
+  const designationClasses = new Set(selectedDesignationClasses);
+
+  // Keep compatibility if the filter control is ever reintroduced.
+  const filterEl = document.getElementById("solarDesignationFilter");
+  if (filterEl) {
+    Array.from(filterEl.selectedOptions || []).forEach((opt) => {
+      designationClasses.add(opt.value);
+    });
+  }
 
   return {
     name: document.getElementById("solarNameFilter").value.trim().toLowerCase(),
-    designationClass: document.getElementById("solarDesignationFilter").value,
+    designationClasses,
     famousFilter: document.getElementById("solarFamousFilter").value,
     impactFilter: document.getElementById("solarImpactFilter").value,
     maxEarthDistance: Number.isFinite(maxDistance) ? maxDistance : null,
@@ -1258,7 +1358,6 @@ function buildSelectedObjectStatsMarkup(obj) {
 }
 
 function renderSelectedObjectStats(obj) {
-  const solarPanel = document.getElementById("selectedObjectStats");
   const nightPanel = document.getElementById("nightObjectStats");
   const markup = buildSelectedObjectStatsMarkup(obj);
 
@@ -1267,9 +1366,6 @@ function renderSelectedObjectStats(obj) {
   const fallback = '<p class="object-stats-empty">No statistical data is available for this object in the current dataset.</p>';
   const empty = '<p class="object-stats-empty">Select an object on the 3D map to display statistics.</p>';
 
-  if (solarPanel) {
-    solarPanel.innerHTML = obj ? (markup || fallback) : empty;
-  }
   if (nightPanel) {
     const body = obj ? (markup || fallback) : empty;
     nightPanel.innerHTML = `<h3>Selected Object Insights</h3>${body}`;
@@ -1280,11 +1376,7 @@ function renderObjectStatsMessage(message) {
   const text = String(message || "No statistical data available.");
   const html = `<p class="object-stats-empty">${text}</p>`;
 
-  const solarPanel = document.getElementById("selectedObjectStats");
   const nightPanel = document.getElementById("nightObjectStats");
-  if (solarPanel) {
-    solarPanel.innerHTML = html;
-  }
   if (nightPanel) {
     nightPanel.innerHTML = `<h3>Selected Object Insights</h3>${html}`;
   }
@@ -1385,7 +1477,7 @@ function updateSolarStatistics(objects, datasetTotal) {
     sortedClasses.forEach(([className, count]) => {
       const angle = (count / filteredCount) * 360;
       const end = start + angle;
-      const color = SOLAR_CLASS_COLORS[className] || "#9aa7bf";
+      const color = getSolarClassColor(className);
       segments.push(`${color} ${start.toFixed(2)}deg ${end.toFixed(2)}deg`);
       start = end;
     });
@@ -1394,10 +1486,12 @@ function updateSolarStatistics(objects, datasetTotal) {
 
     legendEl.innerHTML = "";
     sortedClasses.forEach(([className, count]) => {
-      const color = SOLAR_CLASS_COLORS[className] || "#9aa7bf";
+      const color = getSolarClassColor(className);
       const pct = ((count / filteredCount) * 100).toFixed(1);
       const classLabel = classDescriptions.get(className) || SOLAR_CLASS_LABELS[className] || "Unknown or other";
       const item = document.createElement("li");
+      item.dataset.class = className;
+      item.setAttribute("role", "button");
       const swatch = document.createElement("span");
       swatch.className = "solar-legend-swatch";
       swatch.style.backgroundColor = color;
@@ -1405,6 +1499,19 @@ function updateSolarStatistics(objects, datasetTotal) {
       text.textContent = `${classLabel}: ${count} (${pct}%)`;
       item.appendChild(swatch);
       item.appendChild(text);
+      item.addEventListener("click", () => {
+        if (selectedDesignationClasses.has(className)) {
+          selectedDesignationClasses.delete(className);
+        } else {
+          selectedDesignationClasses.add(className);
+        }
+        updateSolarTypeLegendActiveState();
+        applySolarFilters();
+      });
+      if (selectedDesignationClasses.has(className)) {
+        item.classList.add("selected");
+        item.setAttribute("aria-pressed", "true");
+      }
       legendEl.appendChild(item);
     });
   }
@@ -1727,7 +1834,7 @@ async function applySolarFilters(options = {}) {
       return false;
     }
 
-    if (filters.designationClass !== "any" && obj.designation_class !== filters.designationClass) {
+    if (filters.designationClasses.size > 0 && !filters.designationClasses.has(obj.designation_class)) {
       return false;
     }
 
@@ -1813,7 +1920,7 @@ async function clearSolarFilters() {
   hideSolarVisibilityProgress();
 
   document.getElementById("solarNameFilter").value = "";
-  document.getElementById("solarDesignationFilter").value = "any";
+  selectedDesignationClasses.clear();
   document.getElementById("solarFamousFilter").value = "any";
   document.getElementById("solarImpactFilter").value = "any";
   document.getElementById("solarMaxEarthDistance").value = "";
@@ -1822,6 +1929,7 @@ async function clearSolarFilters() {
   document.getElementById("solarShowPaths").checked = false;
 
   setSolarFilterError("");
+  updateSolarTypeLegendActiveState();
   await applySolarFilters({ preserveVisibilityResult: false });
 }
 
@@ -2186,7 +2294,9 @@ function renderSolarObjects(objects) {
     const baseSize = Number(obj.size || 0.14);
     const size = isSelectable ? Math.max(baseSize, 0.24) : baseSize;
     const geometry = new THREE.SphereGeometry(size, 12, 12);
-    const baseColor = isSelectable ? "#ff3131" : (obj.color || "#88aacc");
+    const baseColor = isSelectable
+      ? (obj.color || getSolarClassColor(obj.designation_class))
+      : (obj.color || "#88aacc");
     const mesh = new THREE.Mesh(
       geometry,
       new THREE.MeshStandardMaterial({

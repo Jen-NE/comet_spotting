@@ -9,6 +9,64 @@ body {
   color: #eef3ff;
 }
 
+.welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(72, 130, 220, 0.25), transparent 46%),
+    radial-gradient(circle at 85% 12%, rgba(18, 45, 104, 0.32), transparent 42%),
+    rgba(4, 8, 18, 0.82);
+}
+
+.welcome-overlay.hidden {
+  display: none;
+}
+
+.welcome-card {
+  width: min(760px, 100%);
+  border-radius: 16px;
+  border: 1px solid #4e6ea7;
+  padding: 22px;
+  background: linear-gradient(160deg, #142a53 0%, #0f1f3f 46%, #0d1630 100%);
+  box-shadow: 0 28px 60px rgba(3, 8, 20, 0.56);
+}
+
+.welcome-card h2 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.15;
+  color: #f4f8ff;
+}
+
+.welcome-card p {
+  margin: 10px 0 0;
+  color: #c9dcff;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.welcome-list {
+  margin: 14px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+  color: #e4efff;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.welcome-card button {
+  margin-top: 16px;
+  max-width: 240px;
+  border: 1px solid #8eb2f3;
+  background: linear-gradient(180deg, #2f65ca 0%, #1f4ea8 100%);
+  font-weight: 700;
+}
+
 .app-shell {
   min-height: 100vh;
   padding: 14px;
@@ -307,6 +365,7 @@ button {
   border-radius: 10px;
   overflow: hidden;
   background: #050a12;
+  position: relative;
 }
 
 .solar-stats-panel {
@@ -384,6 +443,69 @@ button {
   height: 12px;
   border-radius: 3px;
   flex-shrink: 0;
+}
+
+.solar-type-legend-panel {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #3d588d;
+  border-radius: 10px;
+  background: rgba(18, 34, 68, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 10;
+  max-width: 200px;
+}
+
+.solar-type-legend-panel h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #dceaff;
+}
+
+.solar-type-legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.solar-type-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #d7e8ff;
+}
+
+.solar-type-legend li[role="button"], .solar-class-legend li[role="button"] {
+  cursor: pointer;
+  padding-left: 6px;
+  transition: all 0.15s ease;
+}
+
+.solar-type-legend li:not(.selected)[role="button"], .solar-class-legend li:not(.selected)[role="button"] {
+  opacity: 0.5;
+  color: #8a9fb8;
+}
+
+.solar-type-legend li:hover, .solar-class-legend li:hover {
+  opacity: 0.8;
+}
+
+.solar-type-legend li.selected, .solar-class-legend li.selected {
+  background: linear-gradient(90deg, rgba(71, 153, 255, 0.3), rgba(71, 153, 255, 0.1));
+  border-left: 3px solid #4799ff;
+  font-weight: 600;
+  color: #7fd3ff;
+  opacity: 1;
+}
+
+.solar-type-legend li.selected:hover, .solar-class-legend li.selected:hover {
+  background: linear-gradient(90deg, rgba(71, 153, 255, 0.4), rgba(71, 153, 255, 0.15));
 }
 
 .solar-extra-stat {
@@ -595,5 +717,13 @@ button {
   .solar-orbit-value {
     text-align: left;
     min-width: 0;
+  }
+
+  .welcome-card {
+    padding: 18px;
+  }
+
+  .welcome-card h2 {
+    font-size: 24px;
   }
 }

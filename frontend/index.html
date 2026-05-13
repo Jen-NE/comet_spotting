@@ -8,6 +8,22 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <section id="welcomeOverlay" class="welcome-overlay" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle" aria-describedby="welcomeDescription">
+    <div class="welcome-card">
+      <h2 id="welcomeTitle">Welcome to Comet Night Planner</h2>
+      <p id="welcomeDescription">Explore comet visibility from your location, inspect orbital statistics, and compare object populations in both sky and 3D views.</p>
+      <ul class="welcome-list">
+        <li>Visibility Planner workflow: choose observer location on the Earth map (or city search), enter object ID, set date, then start live tracking.</li>
+        <li>Night Sky controls: use Left/Right arrows to jump time by your selected step (15m to 2h) and follow visibility changes in real time.</li>
+        <li>Extra Virtual Sky shortcuts: open the top-right ? button inside the sky widget to see available keyboard shortcuts and quick controls.</li>
+        <li>Night Sky insights: monitor map-time status, practical visibility windows, and the statistical object card below the sky map.</li>
+        <li>Solar System 3D: load all objects for a selected date, rotate/zoom the scene, apply filters, and use Set in planner for fast transfer.</li>
+        <li>Filtered Set Statistics: review class distribution, average Earth distance, impact-risk split, and orbit-shape mix for current filters.</li>
+      </ul>
+      <button id="welcomeCloseBtn" type="button">Start Exploring</button>
+    </div>
+  </section>
+
   <main class="app-shell">
     <header class="tabs">
       <button id="tabVisibility" class="tab-btn active" type="button">Visibility Planner</button>
@@ -46,8 +62,14 @@
               <input id="dateInput" type="date" />
             </label>
 
-            <label>Night sky jump step (minutes)
-              <input id="nightSkyJumpMinutes" type="number" min="1" step="1" value="15" />
+            <label>Night sky jump step
+              <select id="nightSkyJumpMinutes">
+                <option value="15" selected>15m</option>
+                <option value="30">30m</option>
+                <option value="45">45m</option>
+                <option value="60">1h</option>
+                <option value="120">2h</option>
+              </select>
             </label>
             <p class="status status-secondary">Use Left/Right arrow keys to jump time backward/forward by this step.</p>
 
@@ -86,19 +108,6 @@
 
             <label>Comet Name
               <input id="solarNameFilter" type="text" placeholder="Type part of comet name" />
-            </label>
-
-            <label>Designation Class (ID prefix)
-              <select id="solarDesignationFilter">
-                <option value="any" selected>Any</option>
-                <option value="P">P - Periodic comet</option>
-                <option value="C">C - Non-periodic comet</option>
-                <option value="D">D - Lost/disappeared comet</option>
-                <option value="A">A - Asteroidal designation</option>
-                <option value="X">X - Uncertain orbit</option>
-                <option value="I">I - Interstellar object</option>
-                <option value="U">U - Unknown/other</option>
-              </select>
             </label>
 
             <label>Popularity
@@ -149,14 +158,16 @@
 
           <p id="solarStatus" class="status">Press Load 3D Map.</p>
           <p id="selectedObjectText">Selected object: none</p>
-          <section id="selectedObjectStats" class="object-stats-panel" aria-live="polite">
-            <p class="object-stats-empty">Select an object on the 3D map to display statistics.</p>
-          </section>
           <button id="useSelectedBtn" type="button" disabled>Use selected object in planner</button>
         </section>
 
         <section class="panel solar-view">
-          <div id="solarCanvas"></div>
+          <div id="solarCanvas">
+            <section class="solar-type-legend-panel" aria-label="Object type colors in 3D map">
+              <h3>Object Type Colors</h3>
+              <ul id="solarTypeLegend" class="solar-type-legend"></ul>
+            </section>
+          </div>
           <section id="solarStatsPanel" class="solar-stats-panel" aria-label="Filtered set statistics">
             <h3>Filtered Set Statistics</h3>
             <div class="solar-stats-grid">

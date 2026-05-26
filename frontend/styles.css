@@ -435,7 +435,7 @@ button {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #d7e8ff;
+  color: #ffffff;
 }
 
 .solar-legend-swatch {
@@ -451,10 +451,10 @@ button {
   left: 12px;
   margin: 0;
   padding: 10px;
-  border: 1px solid #3d588d;
+  border: 1px solid #8fb3e6;
   border-radius: 10px;
-  background: rgba(18, 34, 68, 0.85);
-  backdrop-filter: blur(4px);
+  background: rgba(6, 14, 30, 0.96);
+  backdrop-filter: blur(6px);
   z-index: 10;
   max-width: 200px;
 }
@@ -478,7 +478,8 @@ button {
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: #d7e8ff;
+  color: #ffffff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.9);
 }
 
 .solar-type-legend li[role="button"], .solar-class-legend li[role="button"] {
@@ -488,24 +489,24 @@ button {
 }
 
 .solar-type-legend li:not(.selected)[role="button"], .solar-class-legend li:not(.selected)[role="button"] {
-  opacity: 0.5;
-  color: #8a9fb8;
+  opacity: 1;
+  color: #ffffff;
 }
 
 .solar-type-legend li:hover, .solar-class-legend li:hover {
-  opacity: 0.8;
+  opacity: 1;
 }
 
 .solar-type-legend li.selected, .solar-class-legend li.selected {
-  background: linear-gradient(90deg, rgba(71, 153, 255, 0.3), rgba(71, 153, 255, 0.1));
-  border-left: 3px solid #4799ff;
+  background: linear-gradient(90deg, rgba(111, 179, 255, 0.36), rgba(111, 179, 255, 0.16));
+  border-left: 3px solid #cfe6ff;
   font-weight: 600;
-  color: #7fd3ff;
+  color: #ffffff;
   opacity: 1;
 }
 
 .solar-type-legend li.selected:hover, .solar-class-legend li.selected:hover {
-  background: linear-gradient(90deg, rgba(71, 153, 255, 0.4), rgba(71, 153, 255, 0.15));
+  background: linear-gradient(90deg, rgba(111, 179, 255, 0.46), rgba(111, 179, 255, 0.22));
 }
 
 .solar-extra-stat {

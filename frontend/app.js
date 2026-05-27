@@ -1243,7 +1243,7 @@ function formatEarthDistance(auValue) {
 
 function formatStatValue(value, formatter) {
   if (!Number.isFinite(value)) {
-    return "nan";
+    return "unknown";
   }
   return formatter(value);
 }
@@ -1268,7 +1268,10 @@ function buildSelectedObjectStatsMarkup(obj) {
   const bv = obj.color_bv == null ? NaN : Number(obj.color_bv);
   const radiusKm = obj.radius_km == null ? NaN : Number(obj.radius_km);
   const rotationHours = obj.rotation_period_hours == null ? NaN : Number(obj.rotation_period_hours);
-  const spectralType = String(obj.spectral_type || "").trim();
+  const spectralTypeRaw = String(obj.spectral_type || "").trim();
+  const spectralType = spectralTypeRaw && !["nan", "none", "null", "n.a.", "na"].includes(spectralTypeRaw.toLowerCase())
+    ? spectralTypeRaw
+    : "";
 
   const chips = [];
   if (designationClass) {
@@ -1284,7 +1287,7 @@ function buildSelectedObjectStatsMarkup(obj) {
   const cards = [];
   
   // Distance from Earth - always show if we have data
-  const earthDistanceDisplay = Number.isFinite(earthDistance) ? formatEarthDistance(earthDistance) : "nan";
+  const earthDistanceDisplay = Number.isFinite(earthDistance) ? formatEarthDistance(earthDistance) : "unknown";
   cards.push(`<article class="object-insight-card"><p class="object-insight-label">Distance from Earth</p><p class="object-insight-value">${earthDistanceDisplay}</p></article>`);
   
   // Perihelion Distance - always show
@@ -1338,11 +1341,13 @@ function buildSelectedObjectStatsMarkup(obj) {
   }
 
   const notes = [];
-  if (String(obj.earth_impact_note || "").trim()) {
-    notes.push(String(obj.earth_impact_note).trim());
+  const earthImpactNote = String(obj.earth_impact_note || "").trim();
+  if (earthImpactNote && !["nan", "none", "null"].includes(earthImpactNote.toLowerCase())) {
+    notes.push(earthImpactNote);
   }
-  if (String(obj.fame_note || "").trim()) {
-    notes.push(String(obj.fame_note).trim());
+  const fameNote = String(obj.fame_note || "").trim();
+  if (fameNote && !["nan", "none", "null"].includes(fameNote.toLowerCase())) {
+    notes.push(fameNote);
   }
 
   if (cards.length === 0 && notes.length === 0 && chips.length === 0) {

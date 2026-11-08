@@ -1,39 +1,41 @@
 # Comet Spotting
 
-Interactive comet tracking app with:
-- Python backend API in backend/server.py
-- Static frontend in frontend for map + sky + 3D view
+## Local Setup
 
-## GitHub Pages Deployment
+Install the Python dependencies:
 
-This repository is configured to deploy the frontend folder to GitHub Pages automatically using GitHub Actions.
+```bash
+pip install -r requirements.txt
+```
 
-After pushing to the main branch:
-1. Open repository settings on GitHub.
-2. Go to Pages.
-3. Set Source to GitHub Actions.
-4. Wait for the Deploy Frontend To GitHub Pages workflow to complete.
+## Run Locally
 
-Your site URL will be:
-https://<your-username>.github.io/<your-repo-name>/
+Start the backend server located:
 
-## Backend URL For GitHub Pages
-
-GitHub Pages hosts static files only. The API backend must run elsewhere.
-
-Set your backend base URL in frontend/config.js:
-
-window.COMET_API_BASE_URL = "https://your-backend-domain";
-
-For local development, keep it empty:
-
-window.COMET_API_BASE_URL = "";
-
-## Local Run
-
-Start backend:
-
-/home/jen/Documents/comet_spotting/.venv/bin/python backend/server.py
+backend/server.py
 
 Open:
 http://127.0.0.1:8000
+
+The backend serves both the API and the frontend UI, so there is no separate frontend build step.
+
+## Frontend Libraries
+
+The frontend is a static app and loads its UI libraries directly from CDNs:
+
+- Leaflet for the Earth map
+- Three.js for the 3D solar system view
+- VirtualSky for the night sky view
+- StuQuery as a VirtualSky dependency
+
+Because of that, there is no `npm install` or separate frontend build command for local development.
+
+## License
+
+This project is released under the MIT License. See [LICENSE](LICENSE) for the full text.
+
+## Stop
+
+Press `Ctrl+C` in the terminal running the server.
+
+## 

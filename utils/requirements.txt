@@ -1,0 +1,2 @@
+# Extra packages for the data pipeline scripts in utils/ (not needed to run the app).
+aiohttp

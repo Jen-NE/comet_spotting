@@ -4,14 +4,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
-from skyfield.api import load, wgs84
+from skyfield.api import Loader, load, wgs84
 from skyfield.constants import GM_SUN_Pitjeva_2005_km3_s2
 from skyfield.data import mpc
 from skyfield.toposlib import GeographicPosition
 
 
+_ROOT_DIR = Path(__file__).resolve().parent.parent
+
 _TS = load.timescale()
-_EPH = load("de421.bsp")
+# JPL DE421 ephemeris, stored at the repository root.
+_EPH = Loader(str(_ROOT_DIR))("de421.bsp")
 _SUN = _EPH["sun"]
 _EARTH = _EPH["earth"]
 

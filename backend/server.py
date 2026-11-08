@@ -13,7 +13,7 @@ from typing import Any, cast
 
 import numpy as np
 import pandas as pd
-from skyfield.api import load
+from skyfield.api import Loader, load
 from skyfield.constants import GM_SUN_Pitjeva_2005_km3_s2
 from skyfield.data import mpc
 from skyfield.toposlib import GeographicPosition
@@ -32,7 +32,8 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT_DIR / "frontend"
 
 _TS = load.timescale()
-_EPH = load("de421.bsp")
+# JPL DE421 ephemeris, stored at the repository root.
+_EPH = Loader(str(ROOT_DIR))("de421.bsp")
 _SUN = _EPH["sun"]
 
 _VISIBILITY_JOBS: dict[str, dict[str, object]] = {}

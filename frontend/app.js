@@ -287,9 +287,9 @@ async function ensureThreeJs() {
   threeLoadPromise = (async () => {
     if (!window.THREE) {
       try {
-        await loadScriptOnce("https://cdn.jsdelivr.net/npm/three/build/three.min.js");
+        await loadScriptOnce("https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.min.js");
       } catch {
-        await loadScriptOnce("https://fastly.jsdelivr.net/npm/three/build/three.min.js");
+        await loadScriptOnce("https://fastly.jsdelivr.net/npm/three@0.160.1/build/three.min.js");
       }
     }
 
